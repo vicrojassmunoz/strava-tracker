@@ -157,6 +157,8 @@ venv.bak/
 # json files
 data/*.json
 
+CLAUDE.md
+
 # mypy
 .mypy_cache/
 .dmypy.json

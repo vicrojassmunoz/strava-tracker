@@ -2,7 +2,7 @@ import sys
 from loguru import logger
 from logger import setup_logger
 from strava_client import StravaClient
-from llm_client import GroqClient
+from llm_client import LlmClient
 
 setup_logger()
 
@@ -14,7 +14,7 @@ def main():
     try:
         strava = StravaClient()
         logger.success("Strava client initialized")
-        ai_coach = GroqClient()
+        ai_coach = LlmClient()
         logger.success("Groq client initialized")
     except ValueError as e:
         logger.critical(f"Configuration error: {e}")
@@ -56,11 +56,7 @@ def main():
     logger.success("Feedback received from AI coach")
 
     # 5. Print feedback
-    print("\n" + "=" * 60)
-    print("  AI COACH FEEDBACK — HALF MARATHON PREP")
-    print("=" * 60)
-    print(feedback)
-    print("=" * 60)
+    logger.info(f"Feedback: \n{feedback}")
 
 
 if __name__ == '__main__':

@@ -2,30 +2,31 @@ import os
 from datetime import date
 import json
 import tomllib
-from groq import Groq
+import anthropic
 from loguru import logger
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-class GroqClient:
+class LlmClient:
     def __init__(self):
-        api_key = os.getenv('GROQ_API_KEY')
+        api_key = os.getenv('ANTHROPIC_API_KEY')
         if not api_key:
-            raise ValueError("Missing GROQ_API_KEY in .env file")
+            raise ValueError("Missing ANTHROPIC_API_KEY in .env file")
 
-        self.client = Groq(api_key=api_key)
-        logger.debug("Groq API client created")
+        self.client = anthropic.Anthropic(api_key=api_key)
+        logger.debug("Anthropic API client created")
 
-        with open("config.toml", "rb") as f:
+        config_path = os.path.join(os.path.dirname(__file__), "..", "config.toml")
+        with open(config_path, "rb") as f:
             self.config = tomllib.load(f)
         logger.debug("Prompts loaded from config.toml")
 
     def _build_system_prompt(self) -> str:
         raw = self.config["prompts"]["system_prompt"]
         today = date.today()
-        race_date = date(2027, 3, 1)  # ajusta cuando confirmes la fecha exacta
+        race_date = date(2027, 3, 1)
         weeks_to_race = (race_date - today).days // 7
 
         prompt = raw.format(
@@ -35,6 +36,7 @@ class GroqClient:
         logger.debug(f"Race in {weeks_to_race} weeks ({race_date})")
         return prompt
 
+    # TODO: Refactorizar y meter cada cosa en su sitio
     def analyze_raw_workout(self, raw_data: dict, user_message: str = "") -> str:
         # Pre-calcular datos clave para que el modelo no los infiera
         distance_km = round(raw_data.get('distance', 0) / 1000, 2)
@@ -64,7 +66,15 @@ class GroqClient:
         - Max HR: {raw_data.get('max_heartrate', 'N/A')} bpm
         """
 
-        data_string = json.dumps(raw_data, ensure_ascii=False, indent=2)
+        USEFUL_KEYS = [
+            'name', 'type', 'start_date_local', 'distance', 'moving_time',
+            'elapsed_time', 'total_elevation_gain', 'average_speed', 'max_speed',
+            'average_heartrate', 'max_heartrate', 'average_cadence',
+            'splits_metric', 'laps', 'best_efforts', 'perceived_exertion'
+        ]
+        filtered_data = {k: raw_data[k] for k in USEFUL_KEYS if k in raw_data}
+        data_string = json.dumps(filtered_data, ensure_ascii=False, indent=2)
+
         token_estimate = len(data_string) // 4
         logger.debug(f"Payload size: {len(data_string)} chars (~{token_estimate} tokens)")
         logger.debug(f"Pre-calculated — distance: {distance_km} km | pace: {pace_fmt} | duration: {duration_fmt}")
@@ -76,27 +86,26 @@ class GroqClient:
             data_string=data_string
         )
 
-        active = self.config["models"]["active"]
-        model = self.config["models"][active]
+        model = self.config["models"]["claude"]
 
         try:
-            logger.debug("Calling Groq API...")
-            response = self.client.chat.completions.create(
+            logger.debug("Calling Anthropic API...")
+            response = self.client.messages.create(
                 model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.7,
                 max_tokens=1024,
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
             )
             usage = response.usage
             logger.debug(
-                f"Model used: {model} | Tokens — prompt: {usage.prompt_tokens} | "
-                f"completion: {usage.completion_tokens} | total: {usage.total_tokens}")
-            logger.success("Groq response received")
-            return response.choices[0].message.content
+                f"Model used: {model} | Tokens — input: {usage.input_tokens} | "
+                f"output: {usage.output_tokens} | total: {usage.input_tokens + usage.output_tokens}"
+            )
+            logger.success("Anthropic response received")
+            return response.content[0].text
 
         except Exception as e:
-            logger.error(f"Groq API error: {e}")
+            logger.error(f"Anthropic API error: {e}")
             return "Analysis failed."

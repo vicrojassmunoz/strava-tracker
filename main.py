@@ -1,6 +1,6 @@
 import sys
 from loguru import logger
-from logger_config import setup_logger
+from logger import setup_logger
 from strava_client import StravaClient
 from llm_client import GroqClient
 

@@ -36,3 +36,15 @@ class StravaClient:
         response = requests.get(f"{self.base_url}/athlete/activities", headers=headers, params=params)
         response.raise_for_status()
         return response.json()
+
+    def get_activity_details(self, activity_id: int) -> dict:
+        """Fetches the FULL detailed JSON of a specific activity."""
+        if not self.access_token:
+            self.access_token = self._refresh_access_token()
+
+        headers = {'Authorization': f'Bearer {self.access_token}'}
+
+        # Notice we hit /activities/{id} instead of /athlete/activities
+        response = requests.get(f"{self.base_url}/activities/{activity_id}", headers=headers)
+        response.raise_for_status()
+        return response.json()

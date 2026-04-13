@@ -1,5 +1,8 @@
+import os
+import json
+from datetime import datetime
+
 from strava_client import StravaClient
-from data_processing import StravaDataProcessor
 
 
 def main():
@@ -7,27 +10,36 @@ def main():
 
     try:
         client = StravaClient()
-        print("Successfully connected to Strava API. Fetching latest activity...")
+        print("Successfully connected. Fetching latest activity ID...")
 
+        # 1. Get the summary to find the ID of your last run
         activities = client.get_activities(limit=1)
 
         if activities:
-            latest_activity = activities[0]
+            activity_id = activities[0].get('id')
+            print(f"Target locked. Activity ID: {activity_id}")
+            print("Downloading FULL detailed data. This might be massive...")
 
-            # Process the raw data
-            processor = StravaDataProcessor()
-            processed_data = processor.process_activity(latest_activity)
+            # 2. Get the full details using the ID
+            detailed_data = client.get_activity_details(activity_id)
 
-            print("\n--- Processed Activity Report ---")
-            print(f"Name:     {processed_data['name']}")
-            print(f"Type:     {processed_data['type']}")
-            print(f"Distance: {processed_data['distance_km']} km")
-            print(f"Time:     {processed_data['duration']}")
-            print(f"Pace:     {processed_data['pace']}")
-            print("---------------------------------")
-            print("Data ready for notification integration.")
+            # Create a timestamp (e.g., 20240523_101530)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"activity_{timestamp}.json"
+            filepath = os.path.join("data", filename)
+
+            # Ensure the 'data' directory exists
+            os.makedirs("data", exist_ok=True)
+
+            # 3. Save it all to a file to inspect it comfortably
+            print(f"Saving detailed report to {filepath}...")
+            with open(filepath, "w", encoding="utf-8") as file:
+                json.dump(detailed_data, file, indent=4)
+
+            print("Data archived successfully.")
+
         else:
-            print("No recent activities found on this account.")
+            print("No recent activities found.")
 
     except Exception as e:
         print(f"Critical error during execution: {e}")

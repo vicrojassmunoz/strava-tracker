@@ -158,6 +158,7 @@ venv.bak/
 data/*.json
 
 CLAUDE.md
+src/logs/*
 
 # mypy
 .mypy_cache/

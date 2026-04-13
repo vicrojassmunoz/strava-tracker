@@ -37,27 +37,36 @@
   Go to https://www.strava.com/oauth/authorize?client_id=YOUR_CLIENT_ID&response_type=code&redirect_uri=http://localhost&approval_prompt=force&scope=activity:read_all, authorize, copy the code from the redirect URL,
   paste it into src/auth_strava.py and run it once:
 
+  ```bash
   python src/auth_strava.py
+```
 
   Copy the printed refresh token into your .env.
 
   Running
 
   # Start the bot
+  ```bash
   python src/telegram_bot.py
+  ```
 
   # Test the pipeline locally without Telegram
+  ```bash
   python src/test_pipeline.py
+  ```
 
   # Run unit tests
+  ```bash
   uv run pytest tests/ -v
+  ```
 
   Configuration
 
   config.toml controls prompts, model selection, and race target:
-
+  ```bash
   [race]
   date = "2027-03-01"   # target race date
 
   [models]
   active = "claude"     # switch to "llama" or "qwen" to change model
+  ```

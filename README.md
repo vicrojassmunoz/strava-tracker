@@ -23,7 +23,7 @@
   **1. Clone and install dependencies**
   ```bash
   uv sync
-
+  ````
   2. Create a .env file
   ANTHROPIC_API_KEY=
   TELEGRAM_BOT_TOKEN=

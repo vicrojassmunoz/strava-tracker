@@ -18,7 +18,7 @@ class StravaDataProcessor:
         # Distance
         distance_km = distance_m / 1000.0
 
-        # Time — HH:MM:SS si supera la hora
+        # Duration — H:MM:SS if over an hour, otherwise MM:SS
         hours, remainder = divmod(time_s, 3600)
         minutes, seconds = divmod(remainder, 60)
         if hours > 0:
@@ -26,13 +26,13 @@ class StravaDataProcessor:
         else:
             formatted_time = f"{int(minutes):02d}:{int(seconds):02d}"
 
-        # Pace desde average_speed (m/s) → min/km
+        # Pace from average_speed (m/s) → min/km
         if avg_speed > 0:
             pace_min_km = 1000 / (avg_speed * 60)
             pace_min, pace_sec = divmod(pace_min_km * 60, 60)
             formatted_pace = f"{int(pace_min)}:{int(pace_sec):02d} min/km"
         elif distance_km > 0:
-            # fallback con moving_time si no hay speed
+            # fallback using moving_time when speed is unavailable
             pace_sec_per_km = time_s / distance_km
             pace_min, pace_sec = divmod(pace_sec_per_km, 60)
             formatted_pace = f"{int(pace_min)}:{int(pace_sec):02d} min/km"

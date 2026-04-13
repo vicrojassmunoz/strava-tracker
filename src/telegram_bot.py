@@ -5,6 +5,7 @@ from loguru import logger
 from logger import setup_logger
 from strava_client import StravaClient
 from llm_client import LlmClient
+from data_processing import StravaDataProcessor
 import os
 from dotenv import load_dotenv
 
@@ -12,12 +13,13 @@ load_dotenv()
 setup_logger()
 
 ALLOWED_USER_ID = int(os.getenv('TELEGRAM_ALLOWED_USER_ID', 0))
+strava = StravaClient()
+ai_coach = LlmClient()
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    # Just me can use the bot
     if user_id != ALLOWED_USER_ID:
         logger.warning(f"Unauthorized access attempt from user_id: {user_id}")
         await update.message.reply_text("No autorizado.")
@@ -29,11 +31,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Analizando tu última sesión... dame un momento.")
 
     try:
-        # 1. Init clients
-        strava = StravaClient()
-        ai_coach = LlmClient()
-
-        # 2. Fetch latest activity
+        # 1. Fetch latest activity
         logger.info("Fetching latest activity from Strava...")
         activities = strava.get_activities(limit=1)
 
@@ -43,27 +41,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         activity = activities[0]
         activity_id = activity.get('id')
-        activity_name = activity.get('name', 'Unknown')
-        activity_date = activity.get('start_date_local', 'Unknown date')[:10]
-        distance_km = round(activity.get('distance', 0) / 1000, 2)
-        moving_time = activity.get('moving_time', 0)
-        avg_speed = activity.get('average_speed', 0)
-        pace_min_km = (1000 / (avg_speed * 60)) if avg_speed > 0 else 0
-        pace_fmt = f"{int(pace_min_km)}:{int((pace_min_km % 1) * 60):02d} min/km"
+        processed = StravaDataProcessor.process_activity(activity)
 
-        logger.info(f"Activity: '{activity_name}' — {activity_date}")
-        logger.debug(f"  Distance : {distance_km} km | Pace: {pace_fmt}")
+        logger.info(f"Activity: '{processed['name']}' — {processed['date']}")
+        logger.debug(f"  Distance: {processed['distance_km']} km | Pace: {processed['pace']}")
 
-        # 3. Fetch full details
+        # 2. Fetch full details
         detailed_data = strava.get_activity_details(activity_id)
         logger.success(f"Detail data fetched — {len(detailed_data)} fields")
 
-        # 4. Analyze with Groq
+        # 3. Analyze with AI coach
         logger.info("Sending to AI coach...")
         feedback = ai_coach.analyze_raw_workout(detailed_data, user_message=user_message)
         logger.success("Feedback received")
 
-        # 5. Reply on Telegram
+        # 4. Reply on Telegram
         await update.message.reply_text(feedback)
 
     except Exception as e:

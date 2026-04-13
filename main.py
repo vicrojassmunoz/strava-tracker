@@ -1,64 +1,37 @@
-import os
-import requests
-from dotenv import load_dotenv
-
-# Load secrets
-load_dotenv()
-
-CLIENT_ID = os.getenv('STRAVA_CLIENT_ID')
-CLIENT_SECRET = os.getenv('STRAVA_CLIENT_SECRET')
-REFRESH_TOKEN = os.getenv('STRAVA_REFRESH_TOKEN')
+from strava_client import StravaClient
+from data_processing import StravaDataProcessor
 
 
-def get_strava_data():
-    print("Requesting permissions from strava")
+def main():
+    print("Initializing application...")
 
-    # Get access token
-    auth_url = "https://www.strava.com/oauth/token"
-    payload = {
-        'client_id': CLIENT_ID,
-        'client_secret': CLIENT_SECRET,
-        'refresh_token': REFRESH_TOKEN,
-        'grant_type': 'refresh_token',
-        'f': 'json'
-    }
+    try:
+        client = StravaClient()
+        print("Successfully connected to Strava API. Fetching latest activity...")
 
-    auth_response = requests.post(auth_url, data=payload)
+        activities = client.get_activities(limit=1)
 
-    # Check keys
-    if auth_response.status_code != 200:
-        print("Error reading credentials")
-        print(auth_response.json())
-        return
-
-    # Save access token
-    access_token = auth_response.json().get('access_token')
-    print("Successful login")
-
-    # Check last activity
-    activities_url = "https://www.strava.com/api/v3/athlete/activities"
-    headers = {'Authorization': f'Bearer {access_token}'}
-    params = {'per_page': 1}
-
-    act_response = requests.get(activities_url, headers=headers, params=params)
-
-    if act_response.status_code == 200:
-        activities = act_response.json()
         if activities:
-            latest = activities[0]
+            latest_activity = activities[0]
 
-            # Clean data
-            nombre = latest.get('name')
-            distancia = latest.get('distance') / 1000
+            # Process the raw data
+            processor = StravaDataProcessor()
+            processed_data = processor.process_activity(latest_activity)
 
-            print("Connection success. Last activity:")
-            print(f"Title: {nombre}")
-            print(f"Distance: {distancia:.2f} km")
+            print("\n--- Processed Activity Report ---")
+            print(f"Name:     {processed_data['name']}")
+            print(f"Type:     {processed_data['type']}")
+            print(f"Distance: {processed_data['distance_km']} km")
+            print(f"Time:     {processed_data['duration']}")
+            print(f"Pace:     {processed_data['pace']}")
+            print("---------------------------------")
+            print("Data ready for notification integration.")
         else:
-            print("You have no activities")
-    else:
-        print("Error getting activities")
-        print(act_response.json())
+            print("No recent activities found on this account.")
+
+    except Exception as e:
+        print(f"Critical error during execution: {e}")
+
 
 if __name__ == '__main__':
-    get_strava_data()
+    main()

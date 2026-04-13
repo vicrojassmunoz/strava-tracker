@@ -60,6 +60,9 @@ JSON completo:
 {data_string}
 """
 
+[race]
+date = "2027-03-01"
+
 [models]
 qwen = "qwen/qwen3-32b"
 llama = "llama-3.3-70b-versatile"

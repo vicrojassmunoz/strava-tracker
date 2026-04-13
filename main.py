@@ -1,48 +1,66 @@
-import os
-import json
-from datetime import datetime
-
+import sys
+from loguru import logger
+from logger_config import setup_logger
 from strava_client import StravaClient
+from llm_client import GroqClient
+
+setup_logger()
 
 
 def main():
-    print("Initializing application...")
+    logger.info("Initializing performance tracker...")
 
+    # 1. Init clients
     try:
-        client = StravaClient()
-        print("Successfully connected. Fetching latest activity ID...")
+        strava = StravaClient()
+        logger.success("Strava client initialized")
+        ai_coach = GroqClient()
+        logger.success("Groq client initialized")
+    except ValueError as e:
+        logger.critical(f"Configuration error: {e}")
+        sys.exit(1)
 
-        # 1. Get the summary to find the ID of your last run
-        activities = client.get_activities(limit=1)
+    # 2. Fetch latest activity
+    logger.info("Fetching latest activity from Strava...")
+    activities = strava.get_activities(limit=1)
 
-        if activities:
-            activity_id = activities[0].get('id')
-            print(f"Target locked. Activity ID: {activity_id}")
-            print("Downloading FULL detailed data. This might be massive...")
+    if not activities:
+        logger.warning("No activities found.")
+        sys.exit(0)
 
-            # 2. Get the full details using the ID
-            detailed_data = client.get_activity_details(activity_id)
+    activity = activities[0]
+    activity_id = activity.get('id')
+    activity_name = activity.get('name', 'Unknown')
+    activity_date = activity.get('start_date_local', 'Unknown date')[:10]
+    distance_km = round(activity.get('distance', 0) / 1000, 2)
+    moving_time = activity.get('moving_time', 0)
+    avg_speed = activity.get('average_speed', 0)
+    pace_min_km = (1000 / (avg_speed * 60)) if avg_speed > 0 else 0
+    pace_fmt = f"{int(pace_min_km)}:{int((pace_min_km % 1) * 60):02d} min/km"
 
-            # Create a timestamp (e.g., 20240523_101530)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"activity_{timestamp}.json"
-            filepath = os.path.join("data", filename)
+    logger.info(f"Activity found: '{activity_name}' — {activity_date}")
+    logger.debug(f"  ID       : {activity_id}")
+    logger.debug(f"  Distance : {distance_km} km")
+    logger.debug(f"  Time     : {moving_time // 60}min {moving_time % 60}s")
+    logger.debug(f"  Avg pace : {pace_fmt}")
 
-            # Ensure the 'data' directory exists
-            os.makedirs("data", exist_ok=True)
+    # 3. Fetch full details
+    logger.info(f"Fetching full details for activity {activity_id}...")
+    detailed_data = strava.get_activity_details(activity_id)
+    logger.debug(f"  JSON keys: {list(detailed_data.keys())}")
+    logger.success(f"Detail data fetched — {len(detailed_data)} fields")
 
-            # 3. Save it all to a file to inspect it comfortably
-            print(f"Saving detailed report to {filepath}...")
-            with open(filepath, "w", encoding="utf-8") as file:
-                json.dump(detailed_data, file, indent=4)
+    # 4. Analyze with Groq
+    logger.info("Sending data to AI coach (Groq / LLaMA 3.3 70B)...")
+    feedback = ai_coach.analyze_raw_workout(detailed_data)
+    logger.success("Feedback received from AI coach")
 
-            print("Data archived successfully.")
-
-        else:
-            print("No recent activities found.")
-
-    except Exception as e:
-        print(f"Critical error during execution: {e}")
+    # 5. Print feedback
+    print("\n" + "=" * 60)
+    print("  AI COACH FEEDBACK — HALF MARATHON PREP")
+    print("=" * 60)
+    print(feedback)
+    print("=" * 60)
 
 
 if __name__ == '__main__':

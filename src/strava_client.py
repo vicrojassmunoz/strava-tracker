@@ -2,11 +2,12 @@ import os
 import requests
 from loguru import logger
 from dotenv import load_dotenv
+from fitness_client import FitnessClient
 
 load_dotenv()
 
 
-class StravaClient:
+class StravaClient(FitnessClient):
     BASE_URL = "https://www.strava.com/api/v3"
     TOKEN_URL = "https://www.strava.com/oauth/token"
 

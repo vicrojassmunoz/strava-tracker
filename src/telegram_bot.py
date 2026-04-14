@@ -1,3 +1,4 @@
+import io
 import sys
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
@@ -22,13 +23,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user_id != ALLOWED_USER_ID:
         logger.warning(f"Unauthorized access attempt from user_id: {user_id}")
-        await update.message.reply_text("No autorizado.")
+        await update.message.reply_text("No estás autorizado para usar este bot.")
         return
 
     user_message = update.message.text
     logger.info(f"Message received: '{user_message}'")
 
-    await update.message.reply_text("Analizando tu última sesión... dame un momento.")
+    await update.message.reply_text(
+        "¡Vamos allá! Estoy revisando tu última sesión de Strava... un momento."
+    )
 
     try:
         # 1. Fetch latest activity
@@ -36,7 +39,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         activities = strava.get_activities(limit=1)
 
         if not activities:
-            await update.message.reply_text("No encontré actividades en Strava.")
+            await update.message.reply_text(
+                "No encontré ninguna actividad reciente en Strava. ¿Has registrado algo últimamente?"
+            )
             return
 
         activity = activities[0]
@@ -55,12 +60,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         feedback = ai_coach.analyze_raw_workout(detailed_data, user_message=user_message)
         logger.success("Feedback received")
 
-        # 4. Reply on Telegram
+        # 4. Send coach feedback
         await update.message.reply_text(feedback)
+
+        # 5. Send filtered activity data as a JSON attachment
+        filtered_json = ai_coach.filter_activity_data(detailed_data)
+        file_buffer = io.BytesIO(filtered_json.encode("utf-8"))
+        filename = f"activity_{activity_id}.json"
+        await update.message.reply_document(
+            document=file_buffer,
+            filename=filename,
+            caption=f"Datos de la sesión: {processed['name']} ({processed['date']})",
+        )
 
     except Exception as e:
         logger.error(f"Pipeline error: {e}")
-        await update.message.reply_text("Ha ocurrido un error analizando la sesión. Revisa los logs.")
+        await update.message.reply_text(
+            "Algo salió mal al analizar la sesión. Inténtalo de nuevo en un momento."
+        )
 
 
 def main():

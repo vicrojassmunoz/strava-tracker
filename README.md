@@ -1,72 +1,119 @@
 # Strava Tracker
 
-  Personal Telegram bot that fetches your latest Strava activity and delivers AI-powered coaching feedback via Claude.
+Personal Telegram bot that fetches your latest Strava activity and delivers AI-powered coaching feedback.
 
-  ## How it works
+## How it works
 
-  Send any message to the bot → it fetches your latest Strava activity → analyzes it with an AI coach → replies with a structured training report in Spanish.
+Send any message to the bot → it fetches your latest Strava activity → analyzes it with an AI coach → replies with a structured training report in Spanish, followed by a JSON attachment with the raw session data.
 
-  The report always covers three points:
-  1. Performance breakdown (pace, splits, HR zones, consistency)
-  2. Half-marathon projection (how the session maps to race goal)
-  3. Coach's directive (one specific action for the next session)
+The report always covers three points:
+1. Performance breakdown (pace, splits, HR zones, consistency)
+2. Half-marathon projection (how the session maps to race goal)
+3. Coach's directive (one specific action for the next session)
 
-  ## Stack
+## Architecture
 
-  - **python-telegram-bot** — async bot framework
-  - **Strava API v3** — activity data
-  - **Anthropic Claude** — AI coaching analysis
-  - **loguru** — structured logging with daily rotation
+The project uses abstract interfaces so LLM and fitness providers can be swapped without touching the pipeline:
 
-  ## Setup
+```
+FitnessClient (ABC)
+└── StravaClient          — Strava API v3, handles token refresh + Railway rotation
 
-  **1. Clone and install dependencies**
-  ```bash
-  uv sync
-  ````
-  2. Create a .env file
-  ANTHROPIC_API_KEY=
-  TELEGRAM_BOT_TOKEN=
-  TELEGRAM_ALLOWED_USER_ID=
-  STRAVA_CLIENT_ID=
-  STRAVA_CLIENT_SECRET=
-  STRAVA_REFRESH_TOKEN=
+LlmProvider (ABC)
+├── AnthropicProvider     — Claude models (Anthropic API)
+└── GroqProvider          — llama / qwen / scout models (Groq API)
 
-  3. Get your Strava refresh token
-
-  Go to https://www.strava.com/oauth/authorize?client_id=YOUR_CLIENT_ID&response_type=code&redirect_uri=http://localhost&approval_prompt=force&scope=activity:read_all, authorize, copy the code from the redirect URL,
-  paste it into src/auth_strava.py and run it once:
-
-  ```bash
-  python src/auth_strava.py
+LlmClient                 — orchestrates prompts, data filtering, and provider selection
+telegram_bot.py           — entry point; wires everything together
 ```
 
-  Copy the printed refresh token into your .env.
+## Stack
 
-  Running
+- **python-telegram-bot** — async bot framework
+- **Strava API v3** — activity data with automatic refresh token rotation
+- **Anthropic Claude** — default AI coaching analysis
+- **Groq** — alternative LLM backend (llama-3.3-70b, qwen3-32b, llama-4-scout)
+- **loguru** — structured logging with daily rotation
+- **Railway** — deployment target (Procfile included); token rotation via Railway GraphQL API
 
-  # Start the bot
-  ```bash
-  python src/telegram_bot.py
-  ```
+## Setup
 
-  # Test the pipeline locally without Telegram
-  ```bash
-  python src/test_pipeline.py
-  ```
+**1. Clone and install dependencies**
+```bash
+uv sync
+```
 
-  # Run unit tests
-  ```bash
-  uv run pytest tests/ -v
-  ```
+**2. Create a `.env` file**
+```env
+# Required
+ANTHROPIC_API_KEY=
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_ALLOWED_USER_ID=
+STRAVA_CLIENT_ID=
+STRAVA_CLIENT_SECRET=
+STRAVA_REFRESH_TOKEN=
 
-  Configuration
+# Required only when using Groq models
+GROQ_API_KEY=
 
-  config.toml controls prompts, model selection, and race target:
-  ```bash
-  [race]
-  date = "2027-03-01"   # target race date
+# Optional — enables automatic refresh token rotation on Railway
+RAILWAY_API_TOKEN=
+RAILWAY_PROJECT_ID=
+RAILWAY_SERVICE_ID=
+RAILWAY_ENVIRONMENT_ID=
+```
 
-  [models]
-  active = "claude"     # switch to "llama" or "qwen" to change model
-  ```
+**3. Get your Strava refresh token**
+
+Go to the Strava OAuth authorization URL (replace `YOUR_CLIENT_ID`):
+```
+https://www.strava.com/oauth/authorize?client_id=YOUR_CLIENT_ID&response_type=code&redirect_uri=http://localhost&approval_prompt=force&scope=activity:read_all
+```
+Authorize, copy the `code` from the redirect URL, paste it into `src/auth_strava.py`, then run it once:
+```bash
+python src/auth_strava.py
+```
+Copy the printed refresh token into your `.env`.
+
+## Running
+
+```bash
+# Start the Telegram bot
+python src/telegram_bot.py
+
+# Test the full pipeline locally without Telegram
+python src/test_pipeline.py
+
+# Run unit tests
+uv run pytest tests/ -v
+```
+
+## Configuration
+
+`config.toml` controls prompts, model selection, and race target:
+
+```toml
+[race]
+date = "2027-03-01"   # target race date
+
+[models]
+active = "claude"     # switch to "llama", "qwen", or "scout" to use Groq
+```
+
+Available model aliases:
+
+| Alias   | Model                                        | Provider  |
+|---------|----------------------------------------------|-----------|
+| `claude`| claude-sonnet-4-20250514                     | Anthropic |
+| `llama` | llama-3.3-70b-versatile                      | Groq      |
+| `qwen`  | qwen/qwen3-32b                               | Groq      |
+| `scout` | meta-llama/llama-4-scout-17b-16e-instruct    | Groq      |
+
+## Deployment (Railway)
+
+The `Procfile` is configured for Railway:
+```
+worker: python src/telegram_bot.py
+```
+
+When deployed, the bot automatically rotates the Strava refresh token in Railway environment variables whenever Strava issues a new one — no manual intervention needed as long as the `RAILWAY_*` env vars are set.

@@ -66,3 +66,6 @@ llama = "llama-3.3-70b-versatile"
 scout = "meta-llama/llama-4-scout-17b-16e-instruct"
 claude = "claude-sonnet-4-20250514"
 active = "claude"
+
+[railway]
+graphql_url = "https://backboard.railway.app/graphql/v2"

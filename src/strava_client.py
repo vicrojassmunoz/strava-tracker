@@ -3,8 +3,15 @@ import requests
 from loguru import logger
 from dotenv import load_dotenv
 from fitness_client import FitnessClient
+from config import RAILWAY_GRAPHQL_URL
 
 load_dotenv()
+
+RAILWAY_UPSERT_MUTATION = """
+mutation variableUpsert($input: VariableUpsertInput!) {
+  variableUpsert(input: $input)
+}
+"""
 
 
 class StravaClient(FitnessClient):
@@ -17,10 +24,54 @@ class StravaClient(FitnessClient):
         self.refresh_token = os.getenv('STRAVA_REFRESH_TOKEN')
         self.access_token = None
 
+        self._railway_api_token = os.getenv('RAILWAY_API_TOKEN')
+        self._railway_service_id = os.getenv('RAILWAY_SERVICE_ID')
+        self._railway_environment_id = os.getenv('RAILWAY_ENVIRONMENT_ID')
+        self._railway_project_id = os.getenv('RAILWAY_PROJECT_ID')
+
         if not all([self.client_id, self.client_secret, self.refresh_token]):
             raise ValueError("Missing Strava credentials in .env (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN)")
 
         logger.debug("StravaClient initialized")
+
+    def _rotate_railway_refresh_token(self, new_token: str) -> None:
+        required = {
+            'RAILWAY_API_TOKEN': self._railway_api_token,
+            'RAILWAY_SERVICE_ID': self._railway_service_id,
+            'RAILWAY_ENVIRONMENT_ID': self._railway_environment_id,
+            'RAILWAY_PROJECT_ID': self._railway_project_id,
+        }
+        missing = [k for k, v in required.items() if not v]
+        if missing:
+            logger.warning(f"Skipping Railway token rotation — missing env vars: {', '.join(missing)}")
+            return
+
+        payload = {
+            "query": RAILWAY_UPSERT_MUTATION,
+            "variables": {
+                "input": {
+                    "projectId": self._railway_project_id,
+                    "serviceId": self._railway_service_id,
+                    "environmentId": self._railway_environment_id,
+                    "name": "STRAVA_REFRESH_TOKEN",
+                    "value": new_token,
+                }
+            },
+        }
+        headers = {
+            "Authorization": f"Bearer {self._railway_api_token}",
+            "Content-Type": "application/json",
+        }
+        try:
+            resp = requests.post(RAILWAY_GRAPHQL_URL, json=payload, headers=headers, timeout=10)
+            resp.raise_for_status()
+            result = resp.json()
+            if result.get("errors"):
+                logger.error(f"Railway API error during token rotation: {result['errors']}")
+            else:
+                logger.success("STRAVA_REFRESH_TOKEN rotated and saved to Railway")
+        except Exception as exc:
+            logger.error(f"Failed to update STRAVA_REFRESH_TOKEN in Railway: {exc}")
 
     def _refresh_access_token(self) -> str:
         logger.debug("Refreshing Strava access token...")
@@ -32,7 +83,15 @@ class StravaClient(FitnessClient):
         }
         response = requests.post(self.TOKEN_URL, data=payload, timeout=10)
         response.raise_for_status()
-        token = response.json().get('access_token')
+        data = response.json()
+        token = data.get('access_token')
+
+        new_refresh_token = data.get('refresh_token')
+        if new_refresh_token and new_refresh_token != self.refresh_token:
+            logger.info("Strava issued a new refresh_token — rotating...")
+            self.refresh_token = new_refresh_token
+            self._rotate_railway_refresh_token(new_refresh_token)
+
         logger.success("Access token refreshed")
         return token
 

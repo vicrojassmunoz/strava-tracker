@@ -1,6 +1,7 @@
 import io
 import sys
 from telegram import Update
+from telegram.error import Conflict
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 from loguru import logger
 from logger import setup_logger
@@ -80,6 +81,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def handle_error(update: object, context: ContextTypes.DEFAULT_TYPE):
+    if isinstance(context.error, Conflict):
+        logger.warning("Conflict: another bot instance is already polling. This instance will back off.")
+    else:
+        logger.error(f"Unhandled update error: {context.error}")
+
+
 def main():
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     if not token:
@@ -89,6 +97,7 @@ def main():
     logger.info("Starting Telegram bot...")
     app = ApplicationBuilder().token(token).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_error_handler(handle_error)
 
     logger.success("Bot is running. Waiting for messages...")
     app.run_polling()

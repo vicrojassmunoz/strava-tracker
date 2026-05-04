@@ -1,3 +1,4 @@
+import json
 import os
 import requests
 from loguru import logger
@@ -6,6 +7,8 @@ from fitness_client import FitnessClient
 from config import RAILWAY_GRAPHQL_URL
 
 load_dotenv()
+
+TOKENS_FILE = ".tokens.json"
 
 RAILWAY_UPSERT_MUTATION = """
 mutation variableUpsert($input: VariableUpsertInput!) {
@@ -21,7 +24,7 @@ class StravaClient(FitnessClient):
     def __init__(self):
         self.client_id = os.getenv('STRAVA_CLIENT_ID')
         self.client_secret = os.getenv('STRAVA_CLIENT_SECRET')
-        self.refresh_token = os.getenv('STRAVA_REFRESH_TOKEN')
+        self.refresh_token = self._load_refresh_token()
         self.access_token = None
 
         self._railway_api_token = os.getenv('RAILWAY_API_TOKEN')
@@ -33,6 +36,27 @@ class StravaClient(FitnessClient):
             raise ValueError("Missing Strava credentials in .env (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN)")
 
         logger.debug("StravaClient initialized")
+
+    def _load_refresh_token(self) -> str | None:
+        try:
+            with open(TOKENS_FILE) as f:
+                token = json.load(f).get("refresh_token")
+                if token:
+                    logger.debug(f"Loaded refresh token from {TOKENS_FILE}")
+                    return token
+        except FileNotFoundError:
+            pass
+        except Exception as exc:
+            logger.warning(f"Could not read {TOKENS_FILE}: {exc}")
+        return os.getenv('STRAVA_REFRESH_TOKEN')
+
+    def _save_refresh_token(self, token: str) -> None:
+        try:
+            with open(TOKENS_FILE, "w") as f:
+                json.dump({"refresh_token": token}, f)
+            logger.debug(f"Saved refresh token to {TOKENS_FILE}")
+        except Exception as exc:
+            logger.warning(f"Could not write {TOKENS_FILE}: {exc}")
 
     def _rotate_railway_refresh_token(self, new_token: str) -> None:
         required = {
@@ -90,6 +114,7 @@ class StravaClient(FitnessClient):
         if new_refresh_token and new_refresh_token != self.refresh_token:
             logger.info("Strava issued a new refresh_token — rotating...")
             self.refresh_token = new_refresh_token
+            self._save_refresh_token(new_refresh_token)
             self._rotate_railway_refresh_token(new_refresh_token)
 
         logger.success("Access token refreshed")

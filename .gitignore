@@ -156,6 +156,7 @@ venv.bak/
 
 # json files
 data/*.json
+.tokens.json
 
 CLAUDE.md
 src/logs/*

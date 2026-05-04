@@ -31,17 +31,17 @@ def client():
         return LlmClient()
 
 
-# --- _filter_activity_data ---
+# --- filter_activity_data ---
 
 def test_filter_drops_extra_keys(client):
-    data_string = client._filter_activity_data(ACTIVITY_WITH_HR)
+    data_string = client.filter_activity_data(ACTIVITY_WITH_HR)
     data = json.loads(data_string)
     assert 'irrelevant_field' not in data
     assert 'another_extra' not in data
 
 
 def test_filter_keeps_useful_keys(client):
-    data_string = client._filter_activity_data(ACTIVITY_WITH_HR)
+    data_string = client.filter_activity_data(ACTIVITY_WITH_HR)
     data = json.loads(data_string)
     assert 'name' in data
     assert 'splits_metric' in data
@@ -49,7 +49,7 @@ def test_filter_keeps_useful_keys(client):
 
 
 def test_filter_returns_valid_json(client):
-    data_string = client._filter_activity_data(ACTIVITY_WITH_HR)
+    data_string = client.filter_activity_data(ACTIVITY_WITH_HR)
     parsed = json.loads(data_string)
     assert isinstance(parsed, dict)
 
@@ -57,7 +57,7 @@ def test_filter_returns_valid_json(client):
 def test_filter_ignores_missing_useful_keys(client):
     # Activity missing some useful keys — should not raise
     minimal = {'name': 'Easy Run', 'distance': 3000}
-    data_string = client._filter_activity_data(minimal)
+    data_string = client.filter_activity_data(minimal)
     data = json.loads(data_string)
     assert data == {'name': 'Easy Run', 'distance': 3000}
 

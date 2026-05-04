@@ -116,4 +116,4 @@ The `Procfile` is configured for Railway:
 worker: python src/telegram_bot.py
 ```
 
-When deployed, the bot automatically rotates the Strava refresh token in Railway environment variables whenever Strava issues a new one — no manual intervention needed as long as the `RAILWAY_*` env vars are set.
+When Strava issues a new refresh token, the bot persists it to `.tokens.json` in the working directory so it survives process restarts. On Railway, `.tokens.json` is written to `/app` which persists between deploys. Additionally, if the `RAILWAY_*` env vars are configured, the new token is also upserted into the Railway environment variables as a backup.

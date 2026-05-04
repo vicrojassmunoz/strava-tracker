@@ -18,6 +18,11 @@ RAILWAY_ENV = {
 }
 
 
+@pytest.fixture(autouse=True)
+def isolate_token_file(tmp_path, monkeypatch):
+    monkeypatch.setattr('strava_client.TOKENS_FILE', str(tmp_path / '.tokens.json'))
+
+
 @pytest.fixture()
 def client():
     with patch.dict(os.environ, STRAVA_ENV, clear=False):

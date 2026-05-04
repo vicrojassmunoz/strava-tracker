@@ -157,6 +157,7 @@ venv.bak/
 # json files
 data/*.json
 .tokens.json
+strava-tracker.wiki/
 
 CLAUDE.md
 src/logs/*

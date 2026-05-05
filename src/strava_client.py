@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import requests
 from loguru import logger
 from dotenv import load_dotenv
@@ -26,6 +27,7 @@ class StravaClient(FitnessClient):
         self.client_secret = os.getenv('STRAVA_CLIENT_SECRET')
         self.refresh_token = self._load_refresh_token()
         self.access_token = None
+        self._token_expires_at = 0  # unix timestamp; 0 forces immediate refresh
 
         self._railway_api_token = os.getenv('RAILWAY_API_TOKEN')
         self._railway_service_id = os.getenv('RAILWAY_SERVICE_ID')
@@ -109,6 +111,7 @@ class StravaClient(FitnessClient):
         response.raise_for_status()
         data = response.json()
         token = data.get('access_token')
+        self._token_expires_at = data.get('expires_at', 0)
 
         new_refresh_token = data.get('refresh_token')
         if new_refresh_token and new_refresh_token != self.refresh_token:
@@ -121,7 +124,7 @@ class StravaClient(FitnessClient):
         return token
 
     def _get_headers(self) -> dict:
-        if not self.access_token:
+        if not self.access_token or time.time() >= self._token_expires_at - 60:
             self.access_token = self._refresh_access_token()
         return {'Authorization': f'Bearer {self.access_token}'}
 
